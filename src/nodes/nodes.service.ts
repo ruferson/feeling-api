@@ -31,8 +31,10 @@ export class NodesService {
       posY: node.posY,
       status: 'ACTIVE',
       bpm: node.bpm || 0,
-      songTitle: '',
-      artist: '',
+      bpmEstimated: node.bpmEstimated,
+      isPlaying: node.isPlaying,
+      songTitle: node.songTitle,
+      artist: node.artist,
     }));
   }
 

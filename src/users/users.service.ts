@@ -42,9 +42,34 @@ export class UsersService {
       select: {
         id: true,
         email: true,
+        spotifyAccountId: true,
+        spotifyDisplayName: true,
+        spotifyConnectedAt: true,
         createdAt: true,
         updatedAt: true,
         node: true,
+      },
+    });
+  }
+
+  async connectSpotify(
+    userId: string,
+    spotifyAccountId: string,
+    spotifyDisplayName?: string,
+  ) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        spotifyAccountId,
+        spotifyDisplayName,
+        spotifyConnectedAt: new Date(),
+      },
+      select: {
+        id: true,
+        email: true,
+        spotifyAccountId: true,
+        spotifyDisplayName: true,
+        spotifyConnectedAt: true,
       },
     });
   }

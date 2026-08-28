@@ -14,21 +14,28 @@ enum NodeStatus {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  password           String
+  spotifyAccountId   String?   @unique
+  spotifyDisplayName String?
+  spotifyConnectedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   node Node?
 }
 
 model Node {
-  id     String     @id @default(uuid())
-  posX   Float      @default(0.0)
-  posY   Float      @default(0.0)
-  status NodeStatus @default(IDLE)
-  bpm    Int        @default(0)
+  id           String     @id @default(uuid())
+  posX         Float      @default(0.0)
+  posY         Float      @default(0.0)
+  status       NodeStatus @default(IDLE)
+  bpm          Int        @default(0)
+  bpmEstimated Boolean    @default(false)
+  isPlaying    Boolean    @default(false)
+  songTitle    String     @default("")
+  artist       String     @default("")
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

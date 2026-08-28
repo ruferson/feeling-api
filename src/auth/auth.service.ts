@@ -8,12 +8,15 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly httpService: HttpService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -64,5 +67,27 @@ export class AuthService {
       },
       accessToken: this.jwtService.sign(payload),
     };
+  }
+
+  async linkSpotifyAccount(userId: string, code: string) {
+    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const response = await firstValueFrom(
+      this.httpService.post(`${fastApiUrl}/auth/spotify/${userId}`, { code }),
+    );
+    const account = response.data;
+
+    return this.usersService.connectSpotify(
+      userId,
+      account.spotifyAccountId,
+      account.spotifyDisplayName,
+    );
+  }
+
+  async getSpotifyLoginUrl() {
+    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+    const response = await firstValueFrom(
+      this.httpService.get(`${fastApiUrl}/auth/spotify/login-url`),
+    );
+    return response.data;
   }
 }
