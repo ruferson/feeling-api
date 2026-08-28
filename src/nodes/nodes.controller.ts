@@ -16,6 +16,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
+  // Endpoint necesario para obtener todos los nodos activos
+  @Get()
+  async findAll() {
+    return this.nodesService.findAll();
+  }
+
   @Patch('location')
   async updateLocation(
     @Request() req: any,

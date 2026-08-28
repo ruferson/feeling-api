@@ -11,6 +11,31 @@ export class NodesService {
     private readonly httpService: HttpService,
   ) {}
 
+  // Fetch all active nodes with their associated user details
+  async findAll() {
+    const nodes = await this.prisma.node.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return nodes.map((node) => ({
+      id: node.userId,
+      label: node.user?.email ? node.user.email.split('@')[0] : 'User',
+      posX: node.posX,
+      posY: node.posY,
+      status: 'ACTIVE',
+      bpm: node.bpm || 0,
+      songTitle: '',
+      artist: '',
+    }));
+  }
+
   // Update node position and state in PostgreSQL
   async updateLocation(userId: string, updateLocationDto: UpdateLocationDto) {
     const node = await this.prisma.node.findUnique({
