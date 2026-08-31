@@ -11,18 +11,16 @@ export class UsersService {
       data: {
         email: registerDto.email,
         password: registerDto.password,
-        // Nested write: Creates the associated Node automatically in the same transaction
         node: {
           create: {
             posX: registerDto.posX,
             posY: registerDto.posY,
-            bpm: 0,
             status: 'IDLE',
           },
         },
       },
       include: {
-        node: true, // Includes the node object in the returned query
+        node: true,
       },
     });
   }
@@ -33,6 +31,12 @@ export class UsersService {
       include: {
         node: true,
       },
+    });
+  }
+
+  async findBySpotifyAccountId(spotifyAccountId: string) {
+    return this.prisma.user.findUnique({
+      where: { spotifyAccountId },
     });
   }
 
