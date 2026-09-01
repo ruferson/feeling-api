@@ -16,7 +16,7 @@ export class SpotifySyncService {
   ) {}
 
   @Cron(CronExpression.EVERY_10_SECONDS)
-  async handleSpotifySync() {
+  async handleSpotifySync(): Promise<void> {
     try {
       const nodes = await this.prisma.node.findMany();
 
@@ -41,12 +41,12 @@ export class SpotifySyncService {
             });
           }
         } catch {
-          this.logger.warn(`No se pudo sincronizar el nodo ${node.id}`);
+          this.logger.warn(`Failed to sync node ${node.id}`);
         }
       }
     } catch (error) {
       this.logger.error(
-        'Error durante la sincronización de Spotify con FastAPI',
+        'Error during Spotify synchronization with FastAPI',
         error,
       );
     }
