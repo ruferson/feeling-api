@@ -11,8 +11,21 @@ export class NodesService {
     private readonly httpService: HttpService,
   ) {}
 
-  // Fetch all active nodes with their associated user details
-  async findAll() {
+  // Fetch all active nodes filtering Spotify details based on friendship status
+  async findAll(requestingUserId: string) {
+    const friendships = await this.prisma.friendship.findMany({
+      where: {
+        status: 'ACCEPTED',
+        OR: [{ senderId: requestingUserId }, { receiverId: requestingUserId }],
+      },
+    });
+
+    const friendUserIds = new Set<string>(
+      friendships.map((f) =>
+        f.senderId === requestingUserId ? f.receiverId : f.senderId,
+      ),
+    );
+
     const nodes = await this.prisma.node.findMany({
       include: {
         user: {
@@ -24,18 +37,24 @@ export class NodesService {
       },
     });
 
-    return nodes.map((node) => ({
-      id: node.userId,
-      label: node.user?.username ?? 'User',
-      posX: node.posX,
-      posY: node.posY,
-      status: 'ACTIVE',
-      bpm: node.bpm || 0,
-      bpmEstimated: node.bpmEstimated,
-      isPlaying: node.isPlaying,
-      songTitle: node.songTitle,
-      artist: node.artist,
-    }));
+    return nodes.map((node) => {
+      const isOwner = node.userId === requestingUserId;
+      const isFriend = friendUserIds.has(node.userId);
+      const canSeeSpotify = isOwner || isFriend;
+
+      return {
+        id: node.userId,
+        label: node.user?.username ?? 'User',
+        posX: node.posX,
+        posY: node.posY,
+        status: 'ACTIVE',
+        bpm: canSeeSpotify ? node.bpm || 0 : 0,
+        bpmEstimated: canSeeSpotify ? node.bpmEstimated : false,
+        isPlaying: canSeeSpotify ? node.isPlaying : false,
+        songTitle: canSeeSpotify ? node.songTitle : '',
+        artist: canSeeSpotify ? node.artist : '',
+      };
+    });
   }
 
   async updateLocation(userId: string, updateLocationDto: UpdateLocationDto) {

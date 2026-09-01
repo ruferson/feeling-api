@@ -16,10 +16,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
-  // Endpoint necesario para obtener todos los nodos activos
   @Get()
-  async findAll() {
-    return this.nodesService.findAll();
+  async findAll(@Request() req: any) {
+    const userId = req.user.id ?? req.user.sub;
+    return this.nodesService.findAll(userId);
   }
 
   @Patch('location')
@@ -27,7 +27,8 @@ export class NodesController {
     @Request() req: any,
     @Body() updateLocationDto: UpdateLocationDto,
   ) {
-    return this.nodesService.updateLocation(req.user.id, updateLocationDto);
+    const userId = req.user.id ?? req.user.sub;
+    return this.nodesService.updateLocation(userId, updateLocationDto);
   }
 
   @Get(':id/song')
