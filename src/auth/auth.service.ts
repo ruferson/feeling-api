@@ -13,6 +13,9 @@ import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class AuthService {
+  private readonly fastApiUrl =
+    process.env.FASTAPI_URL || 'http://localhost:8000';
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -80,10 +83,10 @@ export class AuthService {
   }
 
   async linkSpotifyAccount(userId: string, code: string) {
-    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
-
     const response = await firstValueFrom(
-      this.httpService.post(`${fastApiUrl}/auth/spotify/${userId}`, { code }),
+      this.httpService.post(`${this.fastApiUrl}/auth/spotify/${userId}`, {
+        code,
+      }),
     );
     const account = response.data;
 
@@ -94,7 +97,7 @@ export class AuthService {
     if (existingUser && existingUser.id !== userId) {
       try {
         await firstValueFrom(
-          this.httpService.delete(`${fastApiUrl}/auth/spotify/${userId}`),
+          this.httpService.delete(`${this.fastApiUrl}/auth/spotify/${userId}`),
         );
       } catch {}
 
@@ -112,7 +115,7 @@ export class AuthService {
     } catch (error) {
       try {
         await firstValueFrom(
-          this.httpService.delete(`${fastApiUrl}/auth/spotify/${userId}`),
+          this.httpService.delete(`${this.fastApiUrl}/auth/spotify/${userId}`),
         );
       } catch {}
       throw error;
@@ -120,9 +123,8 @@ export class AuthService {
   }
 
   async getSpotifyLoginUrl() {
-    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
     const response = await firstValueFrom(
-      this.httpService.get(`${fastApiUrl}/auth/spotify/login-url`),
+      this.httpService.get(`${this.fastApiUrl}/auth/spotify/login-url`),
     );
     return response.data;
   }
