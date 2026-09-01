@@ -7,6 +7,11 @@ import {
 } from 'class-validator';
 
 export class RegisterDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Username is required' })
+  @MinLength(3, { message: 'Username must be at least 3 characters long' })
+  username: string;
+
   @IsEmail({}, { message: 'The provided email is invalid' })
   @IsNotEmpty({ message: 'Email is required' })
   email: string;

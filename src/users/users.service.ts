@@ -9,6 +9,7 @@ export class UsersService {
   async create(registerDto: RegisterDto) {
     return this.prisma.user.create({
       data: {
+        username: registerDto.username,
         email: registerDto.email,
         password: registerDto.password,
         node: {
@@ -34,6 +35,15 @@ export class UsersService {
     });
   }
 
+  async findByUsername(username: string) {
+    return this.prisma.user.findUnique({
+      where: { username },
+      include: {
+        node: true,
+      },
+    });
+  }
+
   async findBySpotifyAccountId(spotifyAccountId: string) {
     return this.prisma.user.findUnique({
       where: { spotifyAccountId },
@@ -45,6 +55,7 @@ export class UsersService {
       where: { id },
       select: {
         id: true,
+        username: true,
         email: true,
         spotifyAccountId: true,
         spotifyDisplayName: true,
@@ -53,6 +64,21 @@ export class UsersService {
         updatedAt: true,
         node: true,
       },
+    });
+  }
+
+  async searchUsers(query: string, currentUserId: string) {
+    return this.prisma.user.findMany({
+      where: {
+        id: { not: currentUserId },
+        OR: [{ username: { contains: query, mode: 'insensitive' } }],
+      },
+      select: {
+        id: true,
+        username: true,
+        node: true,
+      },
+      take: 10,
     });
   }
 
@@ -70,6 +96,7 @@ export class UsersService {
       },
       select: {
         id: true,
+        username: true,
         email: true,
         spotifyAccountId: true,
         spotifyDisplayName: true,

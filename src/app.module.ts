@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { NodesModule } from './nodes/nodes.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SpotifyModule } from './spotify/spotify.module';
+import { FriendsModule } from './friends/friends.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { SpotifyModule } from './spotify/spotify.module';
     UsersModule,
     AuthModule,
     NodesModule,
+    FriendsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

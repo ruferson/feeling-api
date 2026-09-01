@@ -18,7 +18,7 @@ export class NodesService {
         user: {
           select: {
             id: true,
-            email: true,
+            username: true,
           },
         },
       },
@@ -26,7 +26,7 @@ export class NodesService {
 
     return nodes.map((node) => ({
       id: node.userId,
-      label: node.user?.email ? node.user.email.split('@')[0] : 'User',
+      label: node.user?.username ?? 'User',
       posX: node.posX,
       posY: node.posY,
       status: 'ACTIVE',
@@ -38,7 +38,6 @@ export class NodesService {
     }));
   }
 
-  // Update node position and state in PostgreSQL
   async updateLocation(userId: string, updateLocationDto: UpdateLocationDto) {
     const node = await this.prisma.node.findUnique({
       where: { userId },
@@ -60,7 +59,6 @@ export class NodesService {
     });
   }
 
-  // Fetch song info or animation metadata from FastAPI microservice
   async getSongInfoFromFastApi(nodeId: string) {
     const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
     try {
@@ -69,7 +67,6 @@ export class NodesService {
       );
       return response.data;
     } catch {
-      // Fallback response if FastAPI service is temporarily unavailable
       return {
         song: 'Unknown',
         artist: 'Unknown',
