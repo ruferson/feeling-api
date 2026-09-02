@@ -7,9 +7,16 @@ import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NodesGateway } from './nodes.gateway';
 import { NodeTestSimulatorService } from './node-test-simulator.service';
+import { LobbiesModule } from '../lobbies/lobbies.module';
 
 @Module({
-  imports: [HttpModule, PassportModule, AuthModule, PrismaModule],
+  imports: [
+    HttpModule,
+    PassportModule,
+    AuthModule,
+    PrismaModule,
+    LobbiesModule,
+  ],
   controllers: [NodesController],
   providers: [NodesService, NodesGateway, NodeTestSimulatorService],
   exports: [NodesService],

@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NodesService } from './nodes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
+import { LobbiesService } from '../lobbies/lobbies.service';
 import { NotFoundException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 
@@ -13,12 +14,13 @@ describe('NodesService', () => {
   let service: NodesService;
   let prismaService: jest.Mocked<PrismaService>;
   let httpService: jest.Mocked<HttpService>;
+  let lobbiesService: jest.Mocked<LobbiesService>;
 
   // ==========================================================================
   // SETUP & INITIALIZATION
   // ==========================================================================
   beforeEach(async () => {
-    // Define mock implementations for Prisma and Http services
+    // Define mock implementations for Prisma, Http, and Lobbies services
     const mockPrismaService = {
       friendship: {
         findMany: jest.fn(),
@@ -34,6 +36,12 @@ describe('NodesService', () => {
       get: jest.fn(),
     };
 
+    const mockLobbiesService = {
+      getOrCreateAvailableLobbyForUser: jest.fn(),
+      getUserLobby: jest.fn(),
+      switchLobbyToFriend: jest.fn(),
+    };
+
     // Compile the NestJS testing module with mocked dependencies
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -46,12 +54,17 @@ describe('NodesService', () => {
           provide: HttpService,
           useValue: mockHttpService,
         },
+        {
+          provide: LobbiesService,
+          useValue: mockLobbiesService,
+        },
       ],
     }).compile();
 
     service = module.get<NodesService>(NodesService);
     prismaService = module.get(PrismaService);
     httpService = module.get(HttpService);
+    lobbiesService = module.get(LobbiesService);
 
     // Reset mock call histories before each individual test case
     jest.clearAllMocks();
@@ -67,8 +80,14 @@ describe('NodesService', () => {
   // ==========================================================================
   describe('findAll', () => {
     const requestingUserId = 'user-1';
+    const lobbyId = 'lobby-uuid-123';
 
-    it('should return nodes with visible Spotify details for owner and friends, and masked details for strangers', async () => {
+    it('should return nodes in the same lobby with visible Spotify details for owner/friends and masked details for strangers', async () => {
+      // Arrange: mock requesting user's node lookup returning lobbyId
+      (prismaService.node.findUnique as any).mockResolvedValue({
+        lobbyId,
+      });
+
       // Arrange: mock accepted friendships (user-2 is a friend, user-3 is not)
       const friendships: any[] = [
         {
@@ -80,12 +99,13 @@ describe('NodesService', () => {
       ];
       (prismaService.friendship.findMany as any).mockResolvedValue(friendships);
 
-      // Arrange: mock nodes list in database
+      // Arrange: mock nodes list in database associated with the lobbyId
       const nodes: any[] = [
         {
           userId: 'user-1',
           posX: 10,
           posY: 20,
+          lobbyId,
           bpm: 120,
           bpmEstimated: false,
           isPlaying: true,
@@ -97,6 +117,7 @@ describe('NodesService', () => {
           userId: 'user-2',
           posX: 15,
           posY: 25,
+          lobbyId,
           bpm: 130,
           bpmEstimated: true,
           isPlaying: false,
@@ -108,6 +129,7 @@ describe('NodesService', () => {
           userId: 'user-3',
           posX: 30,
           posY: 40,
+          lobbyId,
           bpm: 140,
           bpmEstimated: false,
           isPlaying: true,
@@ -121,7 +143,7 @@ describe('NodesService', () => {
       // Act: execute findAll
       const result = await service.findAll(requestingUserId);
 
-      // Assert: verify proper visibility flags based on relationship status
+      // Assert: verify proper visibility flags and lobby filter evaluation
       expect(result).toEqual([
         {
           id: 'user-1',
@@ -129,6 +151,7 @@ describe('NodesService', () => {
           posX: 10,
           posY: 20,
           status: 'ACTIVE',
+          lobbyId,
           bpm: 120,
           bpmEstimated: false,
           isPlaying: true,
@@ -141,6 +164,7 @@ describe('NodesService', () => {
           posX: 15,
           posY: 25,
           status: 'ACTIVE',
+          lobbyId,
           bpm: 130,
           bpmEstimated: true,
           isPlaying: false,
@@ -153,6 +177,7 @@ describe('NodesService', () => {
           posX: 30,
           posY: 40,
           status: 'ACTIVE',
+          lobbyId,
           bpm: 0,
           bpmEstimated: false,
           isPlaying: false,

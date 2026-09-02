@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { NodesModule } from './nodes/nodes.module';
 import { SpotifyModule } from './spotify/spotify.module';
 import { FriendsModule } from './friends/friends.module';
+import { LobbiesModule } from './lobbies/lobbies.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { FriendsModule } from './friends/friends.module';
     NodesModule,
     FriendsModule,
     SpotifyModule,
+    LobbiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

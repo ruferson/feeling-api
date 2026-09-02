@@ -15,6 +15,7 @@ describe('NodesController (E2E)', () => {
   let userBToken: string;
   let userAId: string;
   let userBId: string;
+  let sharedLobbyId: string;
 
   const timestamp = Date.now();
   const userAData = {
@@ -48,24 +49,39 @@ describe('NodesController (E2E)', () => {
 
     prismaService = app.get(PrismaService);
 
-    // Register User A and capture session details
+    // 1. Create a shared lobby entity for the E2E test suite
+    const sharedLobby = await prismaService.lobby.create({
+      data: {
+        name: 'E2E Test Shared Lobby v1.0.0',
+        maxCapacity: 20,
+      },
+    });
+    sharedLobbyId = sharedLobby.id;
+
+    // 2. Register User A and capture session details
     const resA = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send(userAData);
     userAToken = resA.body.accessToken;
     userAId = resA.body.user.id;
 
-    // Register User B and capture session details
+    // 3. Register User B and capture session details
     const resB = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send(userBData);
     userBToken = resB.body.accessToken;
     userBId = resB.body.user.id;
 
-    // Seed some mock Spotify playback data directly on User B's node to test visibility rules
+    // 4. Assign both users to the same shared lobby and seed mock Spotify data on User B
+    await prismaService.node.update({
+      where: { userId: userAId },
+      data: { lobbyId: sharedLobbyId },
+    });
+
     await prismaService.node.update({
       where: { userId: userBId },
       data: {
+        lobbyId: sharedLobbyId,
         songTitle: 'Secret Song',
         artist: 'Secret Artist',
         isPlaying: true,
@@ -91,6 +107,9 @@ describe('NodesController (E2E)', () => {
     });
     await prismaService.user.deleteMany({
       where: { username: { startsWith: 'e2e_node_' } },
+    });
+    await prismaService.lobby.deleteMany({
+      where: { id: sharedLobbyId },
     });
 
     await prismaService.$disconnect();
@@ -135,7 +154,7 @@ describe('NodesController (E2E)', () => {
     expect(Array.isArray(response.body)).toBe(true);
     const nodeB = response.body.find((n: any) => n.id === userBId);
 
-    // Node should be visible, but Spotify data must be masked out due to lack of friendship
+    // Node should be visible within the same lobby, but Spotify data masked
     expect(nodeB).toBeDefined();
     expect(nodeB.songTitle).toEqual('');
     expect(nodeB.artist).toEqual('');

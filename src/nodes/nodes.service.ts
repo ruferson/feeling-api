@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { LobbiesService } from '../lobbies/lobbies.service';
 
 @Injectable()
 export class NodesService {
@@ -11,10 +12,38 @@ export class NodesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly httpService: HttpService,
+    private readonly lobbiesService: LobbiesService,
   ) {}
 
-  // Fetch all active nodes filtering Spotify details based on friendship status
+  /**
+   * Fetch active nodes belonging ONLY to the requesting user's current lobby.
+   * Applies friendship privacy rules for Spotify song details.
+   */
   async findAll(requestingUserId: string) {
+    // 1. Get requesting user's node to identify their current lobby
+    let userNode = await this.prisma.node.findUnique({
+      where: { userId: requestingUserId },
+      select: { lobbyId: true },
+    });
+
+    // If the node has no lobby assigned yet, auto-assign via LobbiesService
+    if (!userNode?.lobbyId) {
+      await this.lobbiesService.getOrCreateAvailableLobbyForUser(
+        requestingUserId,
+      );
+      userNode = await this.prisma.node.findUnique({
+        where: { userId: requestingUserId },
+        select: { lobbyId: true },
+      });
+    }
+
+    const currentLobbyId = userNode?.lobbyId;
+
+    if (!currentLobbyId) {
+      return [];
+    }
+
+    // 2. Fetch accepted friendships for privacy rule evaluation
     const friendships = await this.prisma.friendship.findMany({
       where: {
         status: 'ACCEPTED',
@@ -28,7 +57,11 @@ export class NodesService {
       ),
     );
 
+    // 3. Query ONLY nodes belonging to the exact same lobbyId
     const nodes = await this.prisma.node.findMany({
+      where: {
+        lobbyId: currentLobbyId,
+      },
       include: {
         user: {
           select: {
@@ -50,6 +83,7 @@ export class NodesService {
         posX: node.posX,
         posY: node.posY,
         status: 'ACTIVE',
+        lobbyId: node.lobbyId,
         bpm: canSeeSpotify ? node.bpm || 0 : 0,
         bpmEstimated: canSeeSpotify ? node.bpmEstimated : false,
         isPlaying: canSeeSpotify ? node.isPlaying : false,

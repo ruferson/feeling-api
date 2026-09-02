@@ -35,6 +35,16 @@ model User {
   receivedFriendRequests Friendship[] @relation("ReceivedRequests")
 }
 
+model Lobby {
+  id          String   @id @default(uuid())
+  name        String   @default("")
+  maxCapacity Int      @default(20)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  nodes Node[]
+}
+
 model Node {
   id           String     @id @default(uuid())
   posX         Float      @default(0.0)
@@ -48,6 +58,10 @@ model Node {
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relación con el Lobby actual del nodo
+  lobbyId String?
+  lobby   Lobby?  @relation(fields: [lobbyId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
