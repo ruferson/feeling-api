@@ -164,17 +164,21 @@ describe('FriendsController', () => {
   // TESTS: getFriends()
   // ==========================================================================
   describe('getFriends', () => {
-    it('should retrieve active friends list for authenticated user', async () => {
-      // Arrange: mock request user and service response
+    it('should retrieve active friends list and pass pagination DTO to FriendsService', async () => {
+      // Arrange: mock request user, query dto and service response
       const mockReq = { user: { id: 'user-uuid-123' } } as any;
+      const queryDto = { page: 1, limit: 10 };
       const expectedFriends = [{ friendshipId: 'f-1', username: 'friend1' }];
       friendsService.getFriends.mockResolvedValue(expectedFriends as any);
 
       // Act: invoke get friends endpoint
-      const result = await controller.getFriends(mockReq);
+      const result = await controller.getFriends(mockReq, queryDto);
 
-      // Assert: verify service interaction
-      expect(friendsService.getFriends).toHaveBeenCalledWith('user-uuid-123');
+      // Assert: verify service interaction with query dto
+      expect(friendsService.getFriends).toHaveBeenCalledWith(
+        'user-uuid-123',
+        queryDto,
+      );
       expect(result).toEqual(expectedFriends);
     });
   });
@@ -183,38 +187,42 @@ describe('FriendsController', () => {
   // TESTS: getSentRequests() & getPendingRequests()
   // ==========================================================================
   describe('getSentRequests', () => {
-    it('should retrieve sent pending requests for authenticated user', async () => {
-      // Arrange: mock request user and service response
+    it('should retrieve sent pending requests and pass pagination DTO to FriendsService', async () => {
+      // Arrange: mock request user, query dto and service response
       const mockReq = { user: { id: 'user-uuid-123' } } as any;
+      const queryDto = { page: 1, limit: 10 };
       const expectedRequests = [{ id: 'f-1', status: 'PENDING' }];
       friendsService.getSentRequests.mockResolvedValue(expectedRequests as any);
 
       // Act: invoke get sent requests endpoint
-      const result = await controller.getSentRequests(mockReq);
+      const result = await controller.getSentRequests(mockReq, queryDto);
 
       // Assert: verify service interaction
       expect(friendsService.getSentRequests).toHaveBeenCalledWith(
         'user-uuid-123',
+        queryDto,
       );
       expect(result).toEqual(expectedRequests);
     });
   });
 
   describe('getPendingRequests', () => {
-    it('should retrieve incoming pending requests for authenticated user', async () => {
-      // Arrange: mock request user and service response
+    it('should retrieve incoming pending requests and pass pagination DTO to FriendsService', async () => {
+      // Arrange: mock request user, query dto and service response
       const mockReq = { user: { id: 'user-uuid-123' } } as any;
+      const queryDto = { page: 1, limit: 10 };
       const expectedRequests = [{ id: 'f-2', status: 'PENDING' }];
       friendsService.getPendingRequests.mockResolvedValue(
         expectedRequests as any,
       );
 
       // Act: invoke get pending requests endpoint
-      const result = await controller.getPendingRequests(mockReq);
+      const result = await controller.getPendingRequests(mockReq, queryDto);
 
       // Assert: verify service interaction
       expect(friendsService.getPendingRequests).toHaveBeenCalledWith(
         'user-uuid-123',
+        queryDto,
       );
       expect(result).toEqual(expectedRequests);
     });

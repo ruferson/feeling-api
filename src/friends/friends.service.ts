@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaginationQueryDto } from './dto/pagination-query.dto';
 
 @Injectable()
 export class FriendsService {
@@ -99,12 +100,18 @@ export class FriendsService {
     });
   }
 
-  async getFriends(userId: string) {
+  async getFriends(userId: string, pagination?: PaginationQueryDto) {
+    const page = pagination?.page ?? 1;
+    const limit = Math.min(pagination?.limit ?? 10, 50);
+    const skip = (page - 1) * limit;
+
     const friendships = await this.prisma.friendship.findMany({
       where: {
         status: 'ACCEPTED',
         OR: [{ senderId: userId }, { receiverId: userId }],
       },
+      take: limit,
+      skip: skip,
       include: {
         sender: {
           select: {
@@ -134,12 +141,18 @@ export class FriendsService {
     });
   }
 
-  async getSentRequests(userId: string) {
+  async getSentRequests(userId: string, pagination?: PaginationQueryDto) {
+    const page = pagination?.page ?? 1;
+    const limit = Math.min(pagination?.limit ?? 10, 50);
+    const skip = (page - 1) * limit;
+
     return this.prisma.friendship.findMany({
       where: {
         senderId: userId,
         status: 'PENDING',
       },
+      take: limit,
+      skip: skip,
       include: {
         receiver: {
           select: { id: true, username: true, spotifyDisplayName: true },
@@ -148,12 +161,18 @@ export class FriendsService {
     });
   }
 
-  async getPendingRequests(userId: string) {
+  async getPendingRequests(userId: string, pagination?: PaginationQueryDto) {
+    const page = pagination?.page ?? 1;
+    const limit = Math.min(pagination?.limit ?? 10, 50);
+    const skip = (page - 1) * limit;
+
     return this.prisma.friendship.findMany({
       where: {
         receiverId: userId,
         status: 'PENDING',
       },
+      take: limit,
+      skip: skip,
       include: {
         sender: {
           select: { id: true, username: true, spotifyDisplayName: true },

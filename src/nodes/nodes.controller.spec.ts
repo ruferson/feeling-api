@@ -106,9 +106,9 @@ describe('NodesController', () => {
   // TESTS: getSongInfo()
   // ==========================================================================
   describe('getSongInfo', () => {
-    it('should retrieve song info for a given node ID from NodesService', async () => {
-      // Arrange: mock node ID parameter and service response
-      const nodeId = 'node-xyz';
+    it('should retrieve song info for a given valid node UUID from NodesService', async () => {
+      // Arrange: mock node UUID parameter and service response
+      const nodeId = '3dbf0d72-b8b6-464b-b92b-81ba1c7ebc62';
       const songInfo = {
         song: 'Bohemian Rhapsody',
         artist: 'Queen',

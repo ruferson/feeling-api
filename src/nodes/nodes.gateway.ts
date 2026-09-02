@@ -7,7 +7,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { UsePipes, ValidationPipe } from '@nestjs/common';
+import { UsePipes, ValidationPipe, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
 import { NodesService } from './nodes.service';
@@ -23,6 +23,8 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
+  private readonly logger = new Logger(NodesGateway.name);
+
   constructor(
     private readonly nodesService: NodesService,
     private readonly jwtService: JwtService,
@@ -34,6 +36,9 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const token = authToken ?? authorization?.replace(/^Bearer\s+/i, '');
 
     if (!token) {
+      this.logger.warn(
+        `Unauthorized WebSocket connection attempt: ${client.id}`,
+      );
       client.disconnect(true);
       return;
     }
@@ -41,19 +46,27 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const payload = await this.jwtService.verifyAsync<{ sub: string }>(token);
       client.data.userId = payload.sub;
-    } catch {
+    } catch (error) {
+      this.logger.warn(`Invalid WebSocket JWT token for client ${client.id}`);
       client.disconnect(true);
     }
   }
 
-  handleDisconnect(_client: Socket) {}
+  handleDisconnect(client: Socket) {
+    this.logger.log(`Client disconnected: ${client.id}`);
+  }
 
-  @UsePipes(new ValidationPipe({ transform: true }))
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @SubscribeMessage('update_location')
   async handleUpdateLocation(
     @ConnectedSocket() client: Socket,
     @MessageBody() location: UpdateLocationDto,
   ) {
+    if (!client.data.userId) {
+      client.disconnect(true);
+      return { status: 'error', message: 'Unauthorized socket session' };
+    }
+
     const updatedNode = await this.nodesService.updateLocation(
       client.data.userId,
       location,

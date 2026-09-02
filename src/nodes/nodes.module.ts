@@ -4,11 +4,12 @@ import { PassportModule } from '@nestjs/passport';
 import { NodesService } from './nodes.service';
 import { NodesController } from './nodes.controller';
 import { AuthModule } from '../auth/auth.module';
+import { PrismaModule } from '../prisma/prisma.module';
 import { NodesGateway } from './nodes.gateway';
 import { NodeTestSimulatorService } from './node-test-simulator.service';
 
 @Module({
-  imports: [HttpModule, PassportModule, AuthModule],
+  imports: [HttpModule, PassportModule, AuthModule, PrismaModule],
   controllers: [NodesController],
   providers: [NodesService, NodesGateway, NodeTestSimulatorService],
   exports: [NodesService],

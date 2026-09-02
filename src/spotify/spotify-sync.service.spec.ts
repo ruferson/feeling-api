@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SpotifySyncService } from './spotify-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { HttpService } from '@nestjs/axios';
+import { Logger } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 
 // ============================================================================
@@ -17,6 +18,10 @@ describe('SpotifySyncService', () => {
   // SETUP & INITIALIZATION
   // ==========================================================================
   beforeEach(async () => {
+    // Suppress Logger error/warn output during intentional error simulation tests
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
     // Define mock implementations for Prisma and Http services
     const mockPrismaService = {
       node: {
@@ -82,10 +87,9 @@ describe('SpotifySyncService', () => {
       await service.handleSpotifySync();
 
       // Assert: verify calls and database update with active song data
+      const expectedUrl = `${process.env.FASTAPI_URL || 'http://localhost:8000'}/nodes/user-1/song`;
       expect(prismaService.node.findMany).toHaveBeenCalled();
-      expect(httpService.get).toHaveBeenCalledWith(
-        'http://localhost:8000/nodes/user-1/song',
-      );
+      expect(httpService.get).toHaveBeenCalledWith(expectedUrl);
       expect(prismaService.node.update).toHaveBeenCalledWith({
         where: { id: 'node-1' },
         data: {

@@ -11,19 +11,25 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly usersService: UsersService) {
+    const secret = process.env.JWT_SECRET;
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || 'super_secret_key_change_in_production',
+      secretOrKey: secret || 'super_secret_key_change_in_production',
     });
   }
 
   async validate(payload: JwtPayload) {
+    if (!payload || !payload.sub) {
+      throw new UnauthorizedException('Malformed token payload');
+    }
+
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('Invalid token or user does not exist');
     }
+
     return user;
   }
 }

@@ -8,7 +8,6 @@ import { FastApiSongResponseDto } from './dto/fastapi-song-response.dto';
 @Injectable()
 export class SpotifySyncService {
   private readonly logger = new Logger(SpotifySyncService.name);
-  private readonly fastApiUrl = 'http://localhost:8000';
 
   constructor(
     private readonly httpService: HttpService,
@@ -17,6 +16,8 @@ export class SpotifySyncService {
 
   @Cron(CronExpression.EVERY_10_SECONDS)
   async handleSpotifySync(): Promise<void> {
+    const fastApiUrl = process.env.FASTAPI_URL || 'http://localhost:8000';
+
     try {
       const nodes = await this.prisma.node.findMany();
 
@@ -24,7 +25,7 @@ export class SpotifySyncService {
         try {
           const response = await firstValueFrom(
             this.httpService.get<FastApiSongResponseDto>(
-              `${this.fastApiUrl}/nodes/${node.userId}/song`,
+              `${fastApiUrl}/nodes/${node.userId}/song`,
             ),
           );
 

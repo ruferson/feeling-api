@@ -7,15 +7,15 @@
     "^.+\\.(t|j)s$": [
       "ts-jest",
       {
-        "useESM": true,
+        "useESM": false,
         "tsconfig": {
-          "module": "ESNext"
+          "module": "CommonJS"
         }
       }
     ]
   },
-  "extensionsToTreatAsEsm": [".ts"],
   "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/../src/$1"
+    "^src/(.*)$": "<rootDir>/../src/$1",
+    "^@nestjs/throttler$": "<rootDir>/../node_modules/@nestjs/throttler/dist/index.js"
   }
 }

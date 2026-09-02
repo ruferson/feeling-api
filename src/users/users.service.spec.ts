@@ -202,7 +202,7 @@ describe('UsersService', () => {
       expect(prismaService.user.findMany).toHaveBeenCalledWith({
         where: {
           id: { not: currentUserId },
-          OR: [{ username: { contains: query, mode: 'insensitive' } }],
+          username: { contains: query, mode: 'insensitive' },
         },
         select: {
           id: true,

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +6,8 @@ import { UpdateLocationDto } from './dto/update-location.dto';
 
 @Injectable()
 export class NodesService {
+  private readonly logger = new Logger(NodesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly httpService: HttpService,
@@ -85,7 +87,10 @@ export class NodesService {
         this.httpService.get(`${fastApiUrl}/nodes/${nodeId}/song`),
       );
       return response.data;
-    } catch {
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch song info from FastAPI for node ${nodeId}`,
+      );
       return {
         song: 'Unknown',
         artist: 'Unknown',

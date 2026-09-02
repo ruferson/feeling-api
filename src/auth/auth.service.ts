@@ -37,7 +37,8 @@ export class AuthService {
       throw new ConflictException('Username is already taken');
     }
 
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+    const saltRounds = process.env.NODE_ENV === 'production' ? 12 : 10;
+    const hashedPassword = await bcrypt.hash(registerDto.password, saltRounds);
 
     const user = await this.usersService.create({
       ...registerDto,

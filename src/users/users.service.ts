@@ -71,7 +71,7 @@ export class UsersService {
     return this.prisma.user.findMany({
       where: {
         id: { not: currentUserId },
-        OR: [{ username: { contains: query, mode: 'insensitive' } }],
+        username: { contains: query, mode: 'insensitive' },
       },
       select: {
         id: true,

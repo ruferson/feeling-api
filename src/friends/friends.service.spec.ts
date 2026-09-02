@@ -284,7 +284,7 @@ describe('FriendsService', () => {
   describe('getFriends', () => {
     const userId = 'user-1';
 
-    it('should return list of mapped accepted friends', async () => {
+    it('should return list of mapped accepted friends using default pagination parameters', async () => {
       // Arrange: mock multiple friendships with sender/receiver details
       const friendships: any[] = [
         {
@@ -308,15 +308,17 @@ describe('FriendsService', () => {
       ];
       prismaService.friendship.findMany.mockResolvedValue(friendships);
 
-      // Act: get friends list
+      // Act: get friends list without explicit pagination
       const result = await service.getFriends(userId);
 
-      // Assert: verify mapped result where friend details are extracted correctly
+      // Assert: verify mapped result and default pagination args (take: 10, skip: 0)
       expect(prismaService.friendship.findMany).toHaveBeenCalledWith({
         where: {
           status: 'ACCEPTED',
           OR: [{ senderId: userId }, { receiverId: userId }],
         },
+        take: 10,
+        skip: 0,
         include: expect.any(Object),
       });
       expect(result).toEqual([
@@ -329,13 +331,33 @@ describe('FriendsService', () => {
         },
       ]);
     });
+
+    it('should calculate take and skip correctly when pagination parameters are provided', async () => {
+      // Arrange: custom page and limit query
+      const pagination = { page: 2, limit: 20 };
+      prismaService.friendship.findMany.mockResolvedValue([]);
+
+      // Act: get friends list with page 2 and limit 20
+      await service.getFriends(userId, pagination);
+
+      // Assert: verify take is 20 and skip is 20 ((page 2 - 1) * 20)
+      expect(prismaService.friendship.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACCEPTED',
+          OR: [{ senderId: userId }, { receiverId: userId }],
+        },
+        take: 20,
+        skip: 20,
+        include: expect.any(Object),
+      });
+    });
   });
 
   // ==========================================================================
   // TESTS: getSentRequests() & getPendingRequests()
   // ==========================================================================
   describe('getSentRequests', () => {
-    it('should return pending requests sent by user', async () => {
+    it('should return pending requests sent by user with pagination', async () => {
       // Arrange: mock sent pending requests query
       const sentRequests: any[] = [
         { id: 'f-1', senderId: 'user-1', status: 'PENDING' },
@@ -343,13 +365,18 @@ describe('FriendsService', () => {
       prismaService.friendship.findMany.mockResolvedValue(sentRequests);
 
       // Act: fetch sent requests
-      const result = await service.getSentRequests('user-1');
+      const result = await service.getSentRequests('user-1', {
+        page: 1,
+        limit: 10,
+      });
 
       // Assert: verify query parameters and response
       expect(
         prismaService.friendship.findMany as jest.Mock,
       ).toHaveBeenCalledWith({
         where: { senderId: 'user-1', status: 'PENDING' },
+        take: 10,
+        skip: 0,
         include: expect.any(Object),
       });
       expect(result).toEqual(sentRequests);
@@ -357,7 +384,7 @@ describe('FriendsService', () => {
   });
 
   describe('getPendingRequests', () => {
-    it('should return pending requests received by user', async () => {
+    it('should return pending requests received by user with pagination', async () => {
       // Arrange: mock received pending requests query
       const pendingRequests: any[] = [
         { id: 'f-2', receiverId: 'user-1', status: 'PENDING' },
@@ -365,13 +392,18 @@ describe('FriendsService', () => {
       prismaService.friendship.findMany.mockResolvedValue(pendingRequests);
 
       // Act: fetch pending requests
-      const result = await service.getPendingRequests('user-1');
+      const result = await service.getPendingRequests('user-1', {
+        page: 1,
+        limit: 10,
+      });
 
       // Assert: verify query parameters and response
       expect(
         prismaService.friendship.findMany as jest.Mock,
       ).toHaveBeenCalledWith({
         where: { receiverId: 'user-1', status: 'PENDING' },
+        take: 10,
+        skip: 0,
         include: expect.any(Object),
       });
       expect(result).toEqual(pendingRequests);
