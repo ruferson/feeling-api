@@ -15,9 +15,7 @@ import { UpdateLocationDto } from './dto/update-location.dto';
 import { LobbiesService } from '../lobbies/lobbies.service';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
   namespace: 'nodes',
 })
 export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -49,6 +47,10 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = await this.jwtService.verifyAsync<{ sub: string }>(token);
       client.data.userId = payload.sub;
 
+      // Join personal user room
+      const userRoom = `user_${payload.sub}`;
+      client.join(userRoom);
+
       // Ensure user is assigned to a lobby and join the corresponding Socket.io Room
       const lobby = await this.lobbiesService.getUserLobby(payload.sub);
       client.data.lobbyId = lobby.id;
@@ -57,7 +59,7 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.join(roomName);
 
       this.logger.log(
-        `Client ${client.id} (User: ${payload.sub}) connected and joined room ${roomName}`,
+        `Client ${client.id} (User: ${payload.sub}) joined ${roomName} and ${userRoom}`,
       );
     } catch (error) {
       this.logger.warn(`Invalid WebSocket JWT token for client ${client.id}`);
@@ -85,7 +87,7 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       location,
     );
 
-    // Emit event ONLY to clients connected to the same lobby Room
+    // Broadcast node position update to all clients in the same spatial lobby
     const targetRoom = `lobby_${updatedNode.lobbyId}`;
     this.server.to(targetRoom).emit('node_updated', {
       userId: client.data.userId,
@@ -95,9 +97,6 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { status: 'ok', data: updatedNode };
   }
 
-  /**
-   * Allows socket client to switch room when they change lobby (e.g. joining a friend)
-   */
   @SubscribeMessage('switch_lobby_room')
   async handleSwitchLobbyRoom(
     @ConnectedSocket() client: Socket,
@@ -121,5 +120,15 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     return { status: 'ok', joinedRoom: newRoom };
+  }
+
+  /**
+   * Method invoked by Spotify Cron / Service to broadcast track/BPM updates to a lobby room.
+   */
+  broadcastNodeTrackUpdate(lobbyId: string, userId: string, trackData: any) {
+    this.server.to(`lobby_${lobbyId}`).emit('node_track_updated', {
+      userId,
+      track: trackData,
+    });
   }
 }

@@ -2,6 +2,7 @@ import { describe, beforeEach, it, expect, jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FriendsService } from './friends.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { FriendsGateway } from './friends.gateway';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 // ============================================================================
@@ -10,6 +11,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 describe('FriendsService', () => {
   let service: FriendsService;
   let prismaService: jest.Mocked<PrismaService>;
+  let friendsGateway: jest.Mocked<FriendsGateway>;
 
   // ==========================================================================
   // SETUP & INITIALIZATION
@@ -30,7 +32,14 @@ describe('FriendsService', () => {
       },
     };
 
-    // Compile the NestJS testing module with mocked Prisma provider
+    // Define mock implementations for FriendsGateway methods
+    const mockFriendsGateway = {
+      emitFriendRequest: jest.fn(),
+      emitFriendshipAccepted: jest.fn(),
+      emitFriendshipRemoved: jest.fn(),
+    };
+
+    // Compile the NestJS testing module with mocked Prisma and FriendsGateway providers
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         FriendsService,
@@ -38,11 +47,16 @@ describe('FriendsService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: FriendsGateway,
+          useValue: mockFriendsGateway,
+        },
       ],
     }).compile();
 
     service = module.get<FriendsService>(FriendsService);
     prismaService = module.get(PrismaService) as jest.Mocked<PrismaService>;
+    friendsGateway = module.get(FriendsGateway) as jest.Mocked<FriendsGateway>;
 
     // Reset mock call histories before each individual test case
     jest.clearAllMocks();
@@ -70,6 +84,11 @@ describe('FriendsService', () => {
         senderId,
         receiverId: receiver.id,
         status: 'PENDING',
+        sender: {
+          id: senderId,
+          username: 'me',
+          spotifyDisplayName: 'Me',
+        },
       };
       prismaService.friendship.create.mockResolvedValue(
         createdFriendship as any,
@@ -78,14 +97,29 @@ describe('FriendsService', () => {
       // Act: execute sendRequest
       const result = await service.sendRequest(senderId, receiverUsername);
 
-      // Assert: verify prisma calls and created output
+      // Assert: verify prisma calls, websocket emission, and created output
       expect(prismaService.user.findUnique).toHaveBeenCalledWith({
         where: { username: receiverUsername },
+        select: { id: true },
       });
       expect(prismaService.friendship.findFirst).toHaveBeenCalled();
       expect(prismaService.friendship.create as jest.Mock).toHaveBeenCalledWith(
         {
           data: { senderId, receiverId: receiver.id, status: 'PENDING' },
+          include: {
+            sender: {
+              select: { id: true, username: true, spotifyDisplayName: true },
+            },
+          },
+        },
+      );
+      expect(friendsGateway.emitFriendRequest).toHaveBeenCalledWith(
+        receiver.id,
+        {
+          friendshipId: createdFriendship.id,
+          senderId: createdFriendship.senderId,
+          username: createdFriendship.sender.username,
+          spotifyDisplayName: createdFriendship.sender.spotifyDisplayName,
         },
       );
       expect(result).toEqual(createdFriendship);
@@ -99,18 +133,20 @@ describe('FriendsService', () => {
       await expect(
         service.sendRequest(senderId, 'nonexistent'),
       ).rejects.toThrow(
-        new NotFoundException('El usuario especificado no existe.'),
+        new NotFoundException('The specified user does not exist.'),
       );
     });
 
     it('should throw BadRequestException if user tries to send request to themselves', async () => {
       // Arrange: receiver username maps to sender's own user ID
-      const selfUser = { id: senderId, username: 'ruben' };
+      const selfUser = { id: senderId };
       prismaService.user.findUnique.mockResolvedValue(selfUser as any);
 
       // Act & Assert: expect BadRequestException for self-request
       await expect(service.sendRequest(senderId, 'ruben')).rejects.toThrow(
-        new BadRequestException('No puedes enviarte una solicitud a ti mismo.'),
+        new BadRequestException(
+          'You cannot send a friend request to yourself.',
+        ),
       );
     });
 
@@ -126,7 +162,7 @@ describe('FriendsService', () => {
         service.sendRequest(senderId, receiverUsername),
       ).rejects.toThrow(
         new BadRequestException(
-          'Ya existe una relación o solicitud pendiente con este usuario.',
+          'A friendship or pending request already exists with this user.',
         ),
       );
     });
@@ -140,7 +176,7 @@ describe('FriendsService', () => {
     const friendshipId = 'f-1';
 
     it('should successfully accept a pending friend request', async () => {
-      // Arrange: friendship exists and target user is the intended receiver
+      // Arrange: friendship exists, status is PENDING, and target user is the intended receiver
       const existingFriendship = {
         id: friendshipId,
         senderId: 'user-1',
@@ -150,7 +186,17 @@ describe('FriendsService', () => {
       prismaService.friendship.findUnique.mockResolvedValue(
         existingFriendship as any,
       );
-      const updatedFriendship = { ...existingFriendship, status: 'ACCEPTED' };
+      const updatedFriendship = {
+        id: friendshipId,
+        senderId: 'user-1',
+        receiverId: userId,
+        status: 'ACCEPTED',
+        receiver: {
+          id: userId,
+          username: 'amigo',
+          spotifyDisplayName: 'Amigo',
+        },
+      };
       prismaService.friendship.update.mockResolvedValue(
         updatedFriendship as any,
       );
@@ -158,14 +204,29 @@ describe('FriendsService', () => {
       // Act: accept request
       const result = await service.acceptRequest(userId, friendshipId);
 
-      // Assert: verify status update in database
+      // Assert: verify status update in database and websocket emission
       expect(prismaService.friendship.findUnique).toHaveBeenCalledWith({
         where: { id: friendshipId },
+        select: { id: true, receiverId: true, status: true },
       });
       expect(prismaService.friendship.update as jest.Mock).toHaveBeenCalledWith(
         {
           where: { id: friendshipId },
           data: { status: 'ACCEPTED' },
+          include: {
+            receiver: {
+              select: { id: true, username: true, spotifyDisplayName: true },
+            },
+          },
+        },
+      );
+      expect(friendsGateway.emitFriendshipAccepted).toHaveBeenCalledWith(
+        updatedFriendship.senderId,
+        {
+          friendshipId: updatedFriendship.id,
+          friendUserId: updatedFriendship.receiverId,
+          username: updatedFriendship.receiver.username,
+          spotifyDisplayName: updatedFriendship.receiver.spotifyDisplayName,
         },
       );
       expect(result).toEqual(updatedFriendship);
@@ -177,7 +238,7 @@ describe('FriendsService', () => {
 
       // Act & Assert: expect NotFoundException
       await expect(service.acceptRequest(userId, friendshipId)).rejects.toThrow(
-        new NotFoundException('Solicitud de amistad no encontrada.'),
+        new NotFoundException('Pending friend request not found.'),
       );
     });
   });
@@ -207,10 +268,17 @@ describe('FriendsService', () => {
       // Act: reject request
       const result = await service.rejectRequest(userId, friendshipId);
 
-      // Assert: verify deletion call
+      // Assert: verify deletion call and websocket emission
       expect(prismaService.friendship.delete).toHaveBeenCalledWith({
         where: { id: friendshipId },
       });
+      expect(friendsGateway.emitFriendshipRemoved).toHaveBeenCalledWith(
+        existingFriendship.senderId,
+        {
+          friendshipId: existingFriendship.id,
+          removedByUserId: userId,
+        },
+      );
       expect(result).toEqual(existingFriendship);
     });
 
@@ -228,7 +296,7 @@ describe('FriendsService', () => {
 
       // Act & Assert: expect NotFoundException
       await expect(service.rejectRequest(userId, friendshipId)).rejects.toThrow(
-        new NotFoundException('Solicitud de amistad no encontrada.'),
+        new NotFoundException('Pending friend request not found.'),
       );
     });
   });
@@ -254,10 +322,17 @@ describe('FriendsService', () => {
       // Act: remove relationship
       const result = await service.removeOrReject(userId, friendshipId);
 
-      // Assert: verify deletion
+      // Assert: verify deletion and websocket emission to other party
       expect(prismaService.friendship.delete).toHaveBeenCalledWith({
         where: { id: friendshipId },
       });
+      expect(friendsGateway.emitFriendshipRemoved).toHaveBeenCalledWith(
+        friendship.receiverId,
+        {
+          friendshipId: friendship.id,
+          removedByUserId: userId,
+        },
+      );
       expect(result).toEqual(friendship);
     });
 
@@ -274,7 +349,9 @@ describe('FriendsService', () => {
       // Act & Assert: expect NotFoundException
       await expect(
         service.removeOrReject(userId, friendshipId),
-      ).rejects.toThrow(new NotFoundException('Relación no encontrada.'));
+      ).rejects.toThrow(
+        new NotFoundException('Friendship relation not found.'),
+      );
     });
   });
 
@@ -324,7 +401,7 @@ describe('FriendsService', () => {
       expect(result).toEqual([
         {
           friendshipId: 'f-1',
-          id: 'user-2',
+          userId: 'user-2',
           username: 'friend1',
           spotifyDisplayName: 'Friend 1',
           node: null,
@@ -360,7 +437,17 @@ describe('FriendsService', () => {
     it('should return pending requests sent by user with pagination', async () => {
       // Arrange: mock sent pending requests query
       const sentRequests: any[] = [
-        { id: 'f-1', senderId: 'user-1', status: 'PENDING' },
+        {
+          id: 'f-1',
+          senderId: 'user-1',
+          status: 'PENDING',
+          createdAt: new Date(),
+          receiver: {
+            id: 'user-2',
+            username: 'friend1',
+            spotifyDisplayName: 'Friend 1',
+          },
+        },
       ];
       prismaService.friendship.findMany.mockResolvedValue(sentRequests);
 
@@ -370,7 +457,7 @@ describe('FriendsService', () => {
         limit: 10,
       });
 
-      // Assert: verify query parameters and response
+      // Assert: verify query parameters and mapped response
       expect(
         prismaService.friendship.findMany as jest.Mock,
       ).toHaveBeenCalledWith({
@@ -379,7 +466,16 @@ describe('FriendsService', () => {
         skip: 0,
         include: expect.any(Object),
       });
-      expect(result).toEqual(sentRequests);
+      expect(result).toEqual([
+        {
+          id: sentRequests[0].id,
+          friendshipId: sentRequests[0].id,
+          userId: 'user-2',
+          username: 'friend1',
+          spotifyDisplayName: 'Friend 1',
+          createdAt: sentRequests[0].createdAt,
+        },
+      ]);
     });
   });
 
@@ -387,7 +483,17 @@ describe('FriendsService', () => {
     it('should return pending requests received by user with pagination', async () => {
       // Arrange: mock received pending requests query
       const pendingRequests: any[] = [
-        { id: 'f-2', receiverId: 'user-1', status: 'PENDING' },
+        {
+          id: 'f-2',
+          receiverId: 'user-1',
+          status: 'PENDING',
+          createdAt: new Date(),
+          sender: {
+            id: 'user-3',
+            username: 'friend2',
+            spotifyDisplayName: 'Friend 2',
+          },
+        },
       ];
       prismaService.friendship.findMany.mockResolvedValue(pendingRequests);
 
@@ -397,7 +503,7 @@ describe('FriendsService', () => {
         limit: 10,
       });
 
-      // Assert: verify query parameters and response
+      // Assert: verify query parameters and mapped response
       expect(
         prismaService.friendship.findMany as jest.Mock,
       ).toHaveBeenCalledWith({
@@ -406,7 +512,16 @@ describe('FriendsService', () => {
         skip: 0,
         include: expect.any(Object),
       });
-      expect(result).toEqual(pendingRequests);
+      expect(result).toEqual([
+        {
+          id: pendingRequests[0].id,
+          friendshipId: pendingRequests[0].id,
+          userId: 'user-3',
+          username: 'friend2',
+          spotifyDisplayName: 'Friend 2',
+          createdAt: pendingRequests[0].createdAt,
+        },
+      ]);
     });
   });
 });
