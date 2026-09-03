@@ -6,6 +6,7 @@ import { HttpService } from '@nestjs/axios';
 import { LobbiesService } from '../lobbies/lobbies.service';
 import { NotFoundException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
+import { NodeStatus } from '@prisma/client';
 
 // ============================================================================
 // TEST SUITE: NodesService
@@ -20,7 +21,6 @@ describe('NodesService', () => {
   // SETUP & INITIALIZATION
   // ==========================================================================
   beforeEach(async () => {
-    // Define mock implementations for Prisma, Http, and Lobbies services
     const mockPrismaService = {
       friendship: {
         findMany: jest.fn(),
@@ -42,7 +42,6 @@ describe('NodesService', () => {
       switchLobbyToFriend: jest.fn(),
     };
 
-    // Compile the NestJS testing module with mocked dependencies
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NodesService,
@@ -66,11 +65,9 @@ describe('NodesService', () => {
     httpService = module.get(HttpService);
     lobbiesService = module.get(LobbiesService);
 
-    // Reset mock call histories before each individual test case
     jest.clearAllMocks();
   });
 
-  // Basic sanity check to ensure the service is properly instantiated
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -83,12 +80,10 @@ describe('NodesService', () => {
     const lobbyId = 'lobby-uuid-123';
 
     it('should return nodes in the same lobby with visible Spotify details for owner/friends and masked details for strangers', async () => {
-      // Arrange: mock requesting user's node lookup returning lobbyId
       (prismaService.node.findUnique as any).mockResolvedValue({
         lobbyId,
       });
 
-      // Arrange: mock accepted friendships (user-2 is a friend, user-3 is not)
       const friendships: any[] = [
         {
           id: 'f-1',
@@ -99,7 +94,6 @@ describe('NodesService', () => {
       ];
       (prismaService.friendship.findMany as any).mockResolvedValue(friendships);
 
-      // Arrange: mock nodes list in database associated with the lobbyId
       const nodes: any[] = [
         {
           userId: 'user-1',
@@ -111,6 +105,7 @@ describe('NodesService', () => {
           isPlaying: true,
           songTitle: 'Song A',
           artist: 'Artist A',
+          status: NodeStatus.ACTIVE,
           user: { id: 'user-1', username: 'ruben' },
         },
         {
@@ -123,6 +118,7 @@ describe('NodesService', () => {
           isPlaying: false,
           songTitle: 'Song B',
           artist: 'Artist B',
+          status: NodeStatus.ACTIVE,
           user: { id: 'user-2', username: 'friend' },
         },
         {
@@ -135,15 +131,14 @@ describe('NodesService', () => {
           isPlaying: true,
           songTitle: 'Song C',
           artist: 'Artist C',
+          status: NodeStatus.ACTIVE,
           user: { id: 'user-3', username: 'stranger' },
         },
       ];
       (prismaService.node.findMany as any).mockResolvedValue(nodes);
 
-      // Act: execute findAll
       const result = await service.findAll(requestingUserId);
 
-      // Assert: verify proper visibility flags and lobby filter evaluation
       expect(result).toEqual([
         {
           id: 'user-1',
@@ -196,16 +191,13 @@ describe('NodesService', () => {
     const updateDto = { posX: 50.5, posY: 60.6, bpm: 125 };
 
     it('should successfully update node coordinates and optional bpm when node exists', async () => {
-      // Arrange: node exists in database
       const existingNode = { userId, posX: 10, posY: 10, bpm: 100 };
       const updatedNode = { userId, posX: 50.5, posY: 60.6, bpm: 125 };
       (prismaService.node.findUnique as any).mockResolvedValue(existingNode);
       (prismaService.node.update as any).mockResolvedValue(updatedNode);
 
-      // Act: execute updateLocation
       const result = await service.updateLocation(userId, updateDto);
 
-      // Assert: verify prisma update query arguments and result
       expect(prismaService.node.findUnique).toHaveBeenCalledWith({
         where: { userId },
       });
@@ -217,10 +209,8 @@ describe('NodesService', () => {
     });
 
     it('should throw NotFoundException if node does not exist for the user', async () => {
-      // Arrange: node lookup returns null
       (prismaService.node.findUnique as any).mockResolvedValue(null);
 
-      // Act & Assert: expect NotFoundException
       await expect(service.updateLocation(userId, updateDto)).rejects.toThrow(
         new NotFoundException('Node not found for this user'),
       );
@@ -235,16 +225,13 @@ describe('NodesService', () => {
     const nodeId = 'node-123';
 
     it('should fetch and return song info data from FastAPI successfully', async () => {
-      // Arrange: mock successful HttpService get response
       const apiResponse = {
         data: { song: 'Shape of You', artist: 'Ed Sheeran', synced: true },
       };
       (httpService.get as jest.Mock).mockReturnValue(of(apiResponse));
 
-      // Act: fetch song info
       const result = await service.getSongInfoFromFastApi(nodeId);
 
-      // Assert: verify http get call and returned data
       expect(httpService.get).toHaveBeenCalledWith(
         `http://localhost:8000/nodes/${nodeId}/song`,
       );
@@ -252,15 +239,12 @@ describe('NodesService', () => {
     });
 
     it('should fallback to default unknown song object if FastAPI request fails', async () => {
-      // Arrange: mock failed HttpService request throwing an error
       (httpService.get as jest.Mock).mockReturnValue(
         throwError(() => new Error('Network error')),
       );
 
-      // Act: fetch song info
       const result = await service.getSongInfoFromFastApi(nodeId);
 
-      // Assert: verify fallback response structure
       expect(result).toEqual({
         song: 'Unknown',
         artist: 'Unknown',

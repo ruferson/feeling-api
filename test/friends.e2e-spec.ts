@@ -107,6 +107,24 @@ describe('FriendsController (E2E)', () => {
       .expect(400);
   });
 
+  it('/api/friends/request (POST) - should return 404 NotFound when sending request to a non-existent username', async () => {
+    // Attempt sending a friend request targeting an account that does not exist in the database
+    await request(app.getHttpServer())
+      .post('/api/friends/request')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({ username: 'non_existent_target_user_xyz' })
+      .expect(404);
+  });
+
+  it('/api/friends/request (POST) - should return 400 BadRequest when sending duplicate active requests to the same user', async () => {
+    // Attempt sending a redundant friend request to User B while one is already pending
+    await request(app.getHttpServer())
+      .post('/api/friends/request')
+      .set('Authorization', `Bearer ${userAToken}`)
+      .send({ username: userBUsername })
+      .expect(400);
+  });
+
   // ==========================================================================
   // TEST: GET /api/friends/sent & /api/friends/pending
   // ==========================================================================
@@ -142,6 +160,14 @@ describe('FriendsController (E2E)', () => {
       .expect(201);
 
     expect(response.body.status).toEqual('ACCEPTED');
+  });
+
+  it('/api/friends/accept/:id (POST) - should return 404 NotFound if attempting to accept a non-existent or invalid friendship ID', async () => {
+    // Attempt accepting a friendship request using a completely bogus UUID string
+    await request(app.getHttpServer())
+      .post('/api/friends/accept/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${userBToken}`)
+      .expect(404);
   });
 
   // ==========================================================================

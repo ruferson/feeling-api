@@ -19,6 +19,6 @@ import { LobbiesModule } from '../lobbies/lobbies.module';
   ],
   controllers: [NodesController],
   providers: [NodesService, NodesGateway, NodeTestSimulatorService],
-  exports: [NodesService],
+  exports: [NodesService, NodesGateway],
 })
 export class NodesModule {}

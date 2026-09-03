@@ -82,6 +82,29 @@ describe('AuthController (E2E)', () => {
       .expect(409);
   });
 
+  it('/api/auth/register (POST) - should return 400 BadRequest if required payload fields are missing', async () => {
+    // Attempt registration omitting the mandatory password field
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        username: 'incomplete_user',
+        email: 'incomplete@example.com',
+      })
+      .expect(400);
+  });
+
+  it('/api/auth/register (POST) - should return 400 BadRequest if email format is invalid', async () => {
+    // Attempt registration with a malformed email address
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        username: 'bad_email_user',
+        email: 'not-an-email',
+        password: 'SecurePassword123!',
+      })
+      .expect(400);
+  });
+
   // ==========================================================================
   // TEST: POST /api/auth/login
   // ==========================================================================
@@ -108,6 +131,14 @@ describe('AuthController (E2E)', () => {
       .expect(401);
   });
 
+  it('/api/auth/login (POST) - should return 400 BadRequest if login payload is empty or malformed', async () => {
+    // Attempt login without providing expected username/password body fields
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({})
+      .expect(400);
+  });
+
   // ==========================================================================
   // TEST: GET /api/auth/profile (Protected Route with Guards)
   // ==========================================================================
@@ -128,5 +159,13 @@ describe('AuthController (E2E)', () => {
   it('/api/auth/profile (GET) - should return 401 Unauthorized if token is missing', async () => {
     // Attempt accessing protected route without credentials and expect 401 rejection
     await request(app.getHttpServer()).get('/api/auth/profile').expect(401);
+  });
+
+  it('/api/auth/profile (GET) - should return 401 Unauthorized if an invalid or malformed JWT token format is provided', async () => {
+    // Attempt accessing protected route with a corrupted token string
+    await request(app.getHttpServer())
+      .get('/api/auth/profile')
+      .set('Authorization', 'Bearer invalid_malformed_token_string')
+      .expect(401);
   });
 });

@@ -31,8 +31,8 @@ import { PaginationQueryDto } from './dto/pagination-query.dto';
 export class FriendsController {
   constructor(private readonly friendsService: FriendsService) {}
 
-  // Limit friend request submission to 5 per minute to prevent spamming users
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  // Strict limit on outbound request submission to avoid user spamming
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Send a friend request to another user by username',
   })
@@ -111,6 +111,8 @@ export class FriendsController {
     return this.friendsService.removeOrReject(userId!, friendshipId);
   }
 
+  // Moderate rate limits for read endpoints (60 calls per minute) to allow legitimate UI refreshes
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get list of active friends for authenticated user',
   })
@@ -127,6 +129,7 @@ export class FriendsController {
     return this.friendsService.getFriends(userId!, query);
   }
 
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: 'Get list of pending sent friend requests' })
   @ApiResponse({
     status: 200,
@@ -141,6 +144,7 @@ export class FriendsController {
     return this.friendsService.getSentRequests(userId!, query);
   }
 
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: 'Get list of pending incoming friend requests' })
   @ApiResponse({
     status: 200,

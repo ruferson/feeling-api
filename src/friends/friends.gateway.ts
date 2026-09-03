@@ -7,10 +7,8 @@ import {
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
+import { SkipThrottle } from '@nestjs/throttler';
 
-/**
- * Data Transfer Objects enforcing type safety on real-time outbound WebSocket payloads.
- */
 export interface FriendRequestPayload {
   friendshipId: string;
   senderId: string;
@@ -30,18 +28,11 @@ export interface FriendshipRemovedPayload {
   removedByUserId: string;
 }
 
+@SkipThrottle()
 @WebSocketGateway({
-  cors: {
-    origin: process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : [
-          'http://localhost:3000',
-          'http://localhost:3002',
-          'http://127.0.0.1:3002',
-        ],
-    credentials: true,
-  },
-  namespace: 'friends',
+  cors: { origin: '*', credentials: true },
+  transports: ['websocket', 'polling'],
+  namespace: '/api/friends',
 })
 export class FriendsGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -53,10 +44,6 @@ export class FriendsGateway
 
   constructor(private readonly jwtService: JwtService) {}
 
-  /**
-   * Validates inbound socket connection requests using JWT bearer authentication.
-   * On successful verification, registers the socket into an isolated user-specific room.
-   */
   async handleConnection(client: Socket): Promise<void> {
     const authToken = client.handshake.auth?.token as string | undefined;
     const authorization = client.handshake.headers.authorization;
@@ -83,7 +70,6 @@ export class FriendsGateway
 
       client.data.userId = payload.sub;
 
-      // Register socket to target user's isolated room for direct peer-to-peer event dispatches
       const userRoom = `user_${payload.sub}`;
       await client.join(userRoom);
 
@@ -98,9 +84,6 @@ export class FriendsGateway
     }
   }
 
-  /**
-   * Handles socket disconnection events and performs necessary resource cleanup.
-   */
   handleDisconnect(client: Socket): void {
     const userId = client.data?.userId ?? 'Unauthenticated';
     this.logger.log(
@@ -108,9 +91,6 @@ export class FriendsGateway
     );
   }
 
-  /**
-   * Dispatches an inbound friend request notification event strictly to the target user's room.
-   */
   emitFriendRequest(targetUserId: string, payload: FriendRequestPayload): void {
     if (!targetUserId) return;
     this.server
@@ -118,9 +98,6 @@ export class FriendsGateway
       .emit('friend_request_received', payload);
   }
 
-  /**
-   * Dispatches a friendship acceptance notification event strictly to the target user's room.
-   */
   emitFriendshipAccepted(
     targetUserId: string,
     payload: FriendshipAcceptedPayload,
@@ -129,9 +106,6 @@ export class FriendsGateway
     this.server.to(`user_${targetUserId}`).emit('friendship_accepted', payload);
   }
 
-  /**
-   * Dispatches a friendship removal or rejection event strictly to the target user's room.
-   */
   emitFriendshipRemoved(
     targetUserId: string,
     payload: FriendshipRemovedPayload,

@@ -9,8 +9,7 @@ datasource db {
 
 enum NodeStatus {
   IDLE
-  RUNNING
-  LISTENING
+  ACTIVE
 }
 
 enum FriendshipStatus {

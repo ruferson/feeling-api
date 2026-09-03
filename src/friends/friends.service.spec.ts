@@ -89,6 +89,11 @@ describe('FriendsService', () => {
           username: 'me',
           spotifyDisplayName: 'Me',
         },
+        receiver: {
+          id: receiver.id,
+          username: 'amigo',
+          spotifyDisplayName: 'Amigo',
+        },
       };
       prismaService.friendship.create.mockResolvedValue(
         createdFriendship as any,
@@ -108,6 +113,9 @@ describe('FriendsService', () => {
           data: { senderId, receiverId: receiver.id, status: 'PENDING' },
           include: {
             sender: {
+              select: { id: true, username: true, spotifyDisplayName: true },
+            },
+            receiver: {
               select: { id: true, username: true, spotifyDisplayName: true },
             },
           },

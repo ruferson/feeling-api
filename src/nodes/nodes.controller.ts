@@ -20,6 +20,8 @@ import { NodesService } from './nodes.service';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+/// Controller handling REST API endpoints for spatial node coordinates
+/// and external Spotify song metadata retrieval.
 @ApiTags('nodes')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -27,6 +29,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class NodesController {
   constructor(private readonly nodesService: NodesService) {}
 
+  /// Retrieves all spatial nodes within the authenticated user's active lobby.
+  /// Automatically applies friendship privacy masking rules to Spotify metadata.
   @ApiOperation({
     summary: 'Get all active spatial nodes with privacy masking rules applied',
   })
@@ -37,6 +41,8 @@ export class NodesController {
     return this.nodesService.findAll(userId);
   }
 
+  /// Updates the spatial coordinates (posX, posY, optional BPM) of the authenticated user.
+  /// Rate-limited to 30 requests per minute to prevent spatial coordinate spam.
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary: 'Update authenticated user node spatial coordinates',
@@ -59,6 +65,7 @@ export class NodesController {
     return this.nodesService.updateLocation(userId, updateLocationDto);
   }
 
+  /// Fetches live track playback details from the FastAPI microservice for a given node UUID.
   @ApiOperation({
     summary: 'Retrieve external song details for a specific node ID',
   })

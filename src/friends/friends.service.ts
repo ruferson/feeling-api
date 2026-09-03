@@ -89,6 +89,9 @@ export class FriendsService {
         sender: {
           select: { id: true, username: true, spotifyDisplayName: true },
         },
+        receiver: {
+          select: { id: true, username: true, spotifyDisplayName: true },
+        },
       },
     });
 

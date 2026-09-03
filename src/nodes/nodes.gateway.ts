@@ -13,10 +13,15 @@ import { Server, Socket } from 'socket.io';
 import { NodesService } from './nodes.service';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { LobbiesService } from '../lobbies/lobbies.service';
+import { SkipThrottle } from '@nestjs/throttler';
 
+/// WebSocket Gateway managing real-time spatial node movements, lobby room subscriptions,
+/// and live Spotify playback synchronization under the `/nodes` namespace.
+@SkipThrottle()
 @WebSocketGateway({
   cors: { origin: '*' },
-  namespace: 'nodes',
+  transports: ['websocket', 'polling'],
+  namespace: '/api/nodes',
 })
 export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -30,6 +35,8 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly lobbiesService: LobbiesService,
   ) {}
 
+  /// Authenticates incoming Socket.io connections using JWT tokens provided in auth payload or headers.
+  /// Assigns user to their personal room (`user_X`) and active spatial lobby room (`lobby_X`).
   async handleConnection(client: Socket) {
     const authToken = client.handshake.auth?.token as string | undefined;
     const authorization = client.handshake.headers.authorization;
@@ -39,6 +46,7 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.warn(
         `Unauthorized WebSocket connection attempt: ${client.id}`,
       );
+      client.emit('error', { message: 'Unauthorized connection' });
       client.disconnect(true);
       return;
     }
@@ -47,11 +55,9 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = await this.jwtService.verifyAsync<{ sub: string }>(token);
       client.data.userId = payload.sub;
 
-      // Join personal user room
       const userRoom = `user_${payload.sub}`;
       client.join(userRoom);
 
-      // Ensure user is assigned to a lobby and join the corresponding Socket.io Room
       const lobby = await this.lobbiesService.getUserLobby(payload.sub);
       client.data.lobbyId = lobby.id;
 
@@ -61,16 +67,21 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(
         `Client ${client.id} (User: ${payload.sub}) joined ${roomName} and ${userRoom}`,
       );
-    } catch (error) {
-      this.logger.warn(`Invalid WebSocket JWT token for client ${client.id}`);
+    } catch (error: any) {
+      this.logger.warn(
+        `Invalid WebSocket session for client ${client.id}: ${error?.message || error}`,
+      );
+      client.emit('error', { message: 'Invalid token or session error' });
       client.disconnect(true);
     }
   }
 
+  /// Handles socket disconnection lifecycle events.
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
+  /// Updates local user geographical location and broadcasts new position to occupants of the same lobby room.
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @SubscribeMessage('update_location')
   async handleUpdateLocation(
@@ -87,7 +98,6 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
       location,
     );
 
-    // Broadcast node position update to all clients in the same spatial lobby
     const targetRoom = `lobby_${updatedNode.lobbyId}`;
     this.server.to(targetRoom).emit('node_updated', {
       userId: client.data.userId,
@@ -97,6 +107,7 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { status: 'ok', data: updatedNode };
   }
 
+  /// Unsubscribes client from previous lobby room and joins target room upon lobby transitions.
   @SubscribeMessage('switch_lobby_room')
   async handleSwitchLobbyRoom(
     @ConnectedSocket() client: Socket,
@@ -122,13 +133,32 @@ export class NodesGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { status: 'ok', joinedRoom: newRoom };
   }
 
-  /**
-   * Method invoked by Spotify Cron / Service to broadcast track/BPM updates to a lobby room.
-   */
-  broadcastNodeTrackUpdate(lobbyId: string, userId: string, trackData: any) {
-    this.server.to(`lobby_${lobbyId}`).emit('node_track_updated', {
+  /// Broadcasts node updates (Spotify tracks/BPM/status) across room targets.
+  broadcastNodeUpdate(userId: string, updatedNode: any) {
+    const payload = {
       userId,
-      track: trackData,
-    });
+      node: {
+        id: updatedNode.userId,
+        nodeId: updatedNode.id,
+        songTitle: updatedNode.songTitle,
+        artist: updatedNode.artist,
+        isPlaying: updatedNode.isPlaying,
+        bpm: updatedNode.bpm,
+        bpmEstimated: updatedNode.bpmEstimated,
+        status: updatedNode.status,
+        label: updatedNode.user?.username || '',
+      },
+    };
+
+    if (updatedNode.lobbyId) {
+      this.logger.log(
+        `Broadcasting node_updated for user ${userId} to room lobby_${updatedNode.lobbyId}`,
+      );
+      this.server
+        .to(`lobby_${updatedNode.lobbyId}`)
+        .emit('node_updated', payload);
+    }
+
+    this.server.emit('node_updated', payload);
   }
 }

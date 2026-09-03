@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { NodeStatus } from '@prisma/client';
 
 // ============================================================================
 // E2E TEST SUITE: NodesController & Nodes/Spotify Visibility Workflow
@@ -34,9 +35,6 @@ describe('NodesController (E2E)', () => {
     posY: 20,
   };
 
-  // ==========================================================================
-  // GLOBAL TEST SETUP
-  // ==========================================================================
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -86,13 +84,11 @@ describe('NodesController (E2E)', () => {
         artist: 'Secret Artist',
         isPlaying: true,
         bpm: 128,
+        status: NodeStatus.ACTIVE,
       },
     });
   });
 
-  // ==========================================================================
-  // GLOBAL TEST TEARDOWN
-  // ==========================================================================
   afterAll(async () => {
     await prismaService.friendship.deleteMany({
       where: {
@@ -116,9 +112,6 @@ describe('NodesController (E2E)', () => {
     await app.close();
   });
 
-  // ==========================================================================
-  // TEST: PATCH /api/nodes/location
-  // ==========================================================================
   it('/api/nodes/location (PATCH) - should successfully update authenticated user node coordinates', async () => {
     const newLocation = { posX: 55.5, posY: 66.6, bpm: 140 };
 
@@ -141,11 +134,14 @@ describe('NodesController (E2E)', () => {
       .expect(400);
   });
 
-  // ==========================================================================
-  // TEST: GET /api/nodes (Visibility Rules: Strangers vs Friends)
-  // ==========================================================================
+  it('/api/nodes/location (PATCH) - should return 401 Unauthorized if authorization token is missing or omitted', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/nodes/location')
+      .send({ posX: 10.0, posY: 10.0 })
+      .expect(401);
+  });
+
   it('/api/nodes (GET) - should mask Spotify details for non-friend users (strangers)', async () => {
-    // Before establishing friendship, User A views nodes list
     const response = await request(app.getHttpServer())
       .get('/api/nodes')
       .set('Authorization', `Bearer ${userAToken}`)
@@ -154,7 +150,6 @@ describe('NodesController (E2E)', () => {
     expect(Array.isArray(response.body)).toBe(true);
     const nodeB = response.body.find((n: any) => n.id === userBId);
 
-    // Node should be visible within the same lobby, but Spotify data masked
     expect(nodeB).toBeDefined();
     expect(nodeB.songTitle).toEqual('');
     expect(nodeB.artist).toEqual('');
@@ -163,7 +158,6 @@ describe('NodesController (E2E)', () => {
   });
 
   it('/api/nodes (GET) - should reveal Spotify details once users become accepted friends', async () => {
-    // 1. User A sends friend request to User B
     const reqRes = await request(app.getHttpServer())
       .post('/api/friends/request')
       .set('Authorization', `Bearer ${userAToken}`)
@@ -172,13 +166,11 @@ describe('NodesController (E2E)', () => {
 
     const friendshipId = reqRes.body.id;
 
-    // 2. User B accepts the request
     await request(app.getHttpServer())
       .post(`/api/friends/accept/${friendshipId}`)
       .set('Authorization', `Bearer ${userBToken}`)
       .expect(201);
 
-    // 3. User A queries nodes again; Spotify details should now be visible
     const response = await request(app.getHttpServer())
       .get('/api/nodes')
       .set('Authorization', `Bearer ${userAToken}`)
